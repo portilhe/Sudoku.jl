@@ -1,39 +1,39 @@
 """
-Type alias for the board of a sudoku, which is always a square matrix.
+Type alias for the grid of a sudoku, which is always a square matrix.
 """
-BoardT  = Matrix{Int}
+Grid  = Matrix{Int}
 
 
 """
 Define a plain Sudoku from a given borad state.
 
 # Attributes
-- `B::BoardT`: The board.
-- `N::Int`: The dimension of the side of the board.
-- `n:Int`: The subdimension of the side of the board, `sqrt(N)`.
+- `B::Grid`: The grid.
+- `N::Int`: The dimension of the side of the grid.
+- `n:Int`: The subdimension of the side of the grid, `sqrt(N)`.
 """
-mutable struct PlainSudoku <: ASudoku
-    B::BoardT
+struct PlainSudoku <: ASudoku
+    G::Grid
     N::Int
     n::Int
-    function PlainSudoku( B::BoardT )
-        N, _N = size(B)
+    function PlainSudoku( G::Grid )
+        N, _N = size(G)
         if N != _N
-            error( "board is not square" )
+            error( "grid is not square" )
         end
         n = Int(round(sqrt(N)))
-        return new( B, N, n )
+        return new( G, N, n )
     end
 end
 
 
 """
-    getboard( s::PlainSudoku )
+    getgrid( s::PlainSudoku )
 
-Get the board for the Sudoku.
+Get the grid for the Sudoku.
 """
-function getboard( s::PlainSudoku )::BoardT
-    return s.B
+function getgrid( s::PlainSudoku )::Grid
+    return s.G
 end
 
 
@@ -58,11 +58,94 @@ end
 
 
 """
+    issolution( G::Grid, s::PlainSudoku )
+
+Check whether `G` is a solution for the sudoku `s`.
+"""
+function issolution( G::Grid, s::PlainSudoku )::Bool
+    N = s.N
+    n = s.n
+    seq1N = Set(1:N)
+    return checkgrid( s, G, N )          &&
+           checkrows( G, N, seq1N )      &&
+           checkcols( G, N, seq1N )      &&
+           checkboxees( G, N, n, seq1N )
+end
+
+
+"""
+    checkrows( G::Grid, N::Int, seq1N::Set{Int} )
+
+Check whether all rows of `G` are valid, i.e., with no repeated numbers.
+"""
+function checkrows( G::Grid, N::Int, seq1N::Set{Int} )::Bool
+    for i in 1:N
+        if Set(G[i,:]) != seq1N
+            return false
+        end
+    end
+    return true
+end
+
+
+"""
+    checkcols( G::Grid, N::Int, seq1N::Set{Int} )
+
+Check whether all columns of `G` are valid, i.e., with no repeated numbers.
+"""
+function checkcols( G::Grid, N::Int, seq1N::Set{Int} )::Bool
+    for j in 1:N
+        if Set(G[:,j]) != seq1N
+            return false
+        end
+    end
+    return true
+end
+
+
+"""
+    checkboxees( G::Grid, N::Int, n::Int, seq1N::Set{Int} )
+
+Check whether all boxes of `G` are valid, i.e., with no repeated numbers.
+"""
+function checkboxees( G::Grid, N::Int, n::Int, seq1N::Set{Int} )::Bool
+    for i in 1:n:N
+        for j in 1:n:N
+            i1 = i + n - 1
+            j1 = j + n - 1
+            if Set(G[i:i1,j:j1]) != seq1N
+                return false
+            end
+        end
+    end
+    return true
+end
+
+
+"""
+    checkgrid( s::PlainSudoku, G::Grid, N::Int )
+
+Check whether the original grid values are correct.
+"""
+function checkgrid( s::PlainSudoku, G::Grid, N::Int )::Bool
+    G0 = s.G
+    for i in 1:N
+        for j in 1:N
+            if G0[i,j] != 0 && G0[i,j] != G[i,j]
+                return false
+            end
+        end
+    end
+    return true
+end
+
+
+"""
     readsudokufile( ::Type{T}, fname::AbstractString ) where {T <: PlainSudoku}
 
 Build a Plain Sudoku from a file with the following definition format.
 
-Each line corresponds to a row of the sudoku board where a `.` represents a blank.
+Each line corresponds to a row of the sudoku grid where a `.` represents a blank.
 # Example:
 ```
 .6...15..
@@ -76,15 +159,15 @@ Each line corresponds to a row of the sudoku board where a `.` represents a blan
 ..41...5.
 ```
 """
-function readsudokufile( ::Type{T}, fname::AbstractString )::PlainSudoku where {T <: PlainSudoku}
+function readsudokufile( ::Type{T}, fname::AbstractString )::T where {T <: PlainSudoku}
     lines = readlines(fname)
 
     N = length(lines[1])
     if N != length(lines)
-        error("board is not square")
+        error("grid is not square")
     end
 
-    B = BoardT(undef,(N,N))
+    B = Grid(undef,(N,N))
     for (i, line) in enumerate(lines)
         for (j, c) in enumerate(line)
             if c ≡ '.'
@@ -99,19 +182,19 @@ end
 
 
 """
-    writesudokufile( fname::AbstractString, s::PlainSudoku, Bmap=nothing )
+    writesudokufile( fname::AbstractString, s::PlainSudoku, zeromap=nothing )
 
 Write the Plain Sudoku to file with format as defined in the documentation for
     [`readsudokufile`](@ref) for the `PlainSudoku` method.
 """
-function writesudokufile( fname::AbstractString, s::PlainSudoku, Bmap=nothing )
-    if Bmap ≡ nothing
-        Bmap = x-> x == 0 ? "." : "$x"
+function writesudokufile( fname::AbstractString, s::PlainSudoku, zeromap=nothing )
+    if zeromap ≡ nothing
+        zeromap = x-> x == 0 ? "." : "$x"
     end
     open(fname, "w") do io
         for i in 1:s.N
             for j in 1:s.N
-                write(io,"$(Bmap( s.B[i,j] ))")
+                write(io,"$(zeromap( s.G[i,j] ))")
             end
         end
     end
@@ -119,13 +202,13 @@ end
 
 
 """
-    displayboard( s::PlainSudoku )
+    displaygrid( s::PlainSudoku )
 
-Display the board for the plain sudoku `s`.
+Display the grid for the plain sudoku `s`.
 
 # Examples
 ```julia-repl
-julia> displayboard(s)
+julia> displaygrid(s)
  -------------------------
  | . 6 . | . . 1 | 5 . . |
  | . . . | . 5 . | . 3 . |
@@ -141,17 +224,17 @@ julia> displayboard(s)
  -------------------------
 ```
 """
-function displayboard( s::PlainSudoku )
-    _displayboard( s.B, s.N )
+function displaygrid( s::PlainSudoku )
+    _displaygrid( s.G, s.N )
 end
 
 
 """
-    availablevalues( _::PlainSudoku, B::BoardT, N::Int, n::Int, i::Int, j::Int )
+    availablevalues( _::PlainSudoku, B::Grid, N::Int, n::Int, i::Int, j::Int )
 
-Get a vector with the possible values for board `B` at position `(i,j)`.
+Get a vector with the possible values for grid `B` at position `(i,j)`.
 """
-function availablevalues( _::PlainSudoku, B::BoardT, N::Int, n::Int, i::Int, j::Int )::Set{Int}
+function availablevalues( _::PlainSudoku, B::Grid, N::Int, n::Int, i::Int, j::Int )::Set{Int}
     vals = Set( 1:N )
     # check row i
     setdiff!( vals, B[i,:] )

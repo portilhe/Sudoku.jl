@@ -1,22 +1,22 @@
 using Formatting
 
 """
-A single mask for a Killer Sudoku.
+A single cage for a Killer Sudoku.
 
-Define an area of the board with a given sum.
+Define an area of the grid with a given sum.
 
 # Attributes
-- `I::Matrix{Bool}`: A matrix with the same dimensions as the enclosing sudoku board
-                     whose entries are true on the locations belonging to this mask.
-- `sum::Int`: The expected sum of the entries in this mask.
+- `I::Matrix{Bool}`: A matrix with the same dimensions as the enclosing sudoku grid
+                     whose entries are true on the locations belonging to this cage.
+- `sum::Int`: The expected sum of the entries in this cage.
 - `ω::Vector{Set{Int}}`: A vector with all the possilbe combination of values that
                          add up to the given sum.
 """
-struct KillerMask
+struct Cage
     I::Matrix{Bool}
     sum::Int
     ω::Vector{Set{Int}}
-    function KillerMask( I, mSum )
+    function Cage( I, mSum )
         ω = sum_distribution( mSum, sum(I), size(I)[1] )
         return new( I, mSum, ω )
     end
@@ -84,11 +84,11 @@ end
 
 
 """
-    possible_mask_values( m::KillerMask, B::BoardT )
+    possible_cage_values( m::Cage, B::Grid )
 
-Find all availabe values for a mask `m` given the the board `B`.
+Find all availabe values for a cage `m` given the the grid `B`.
 """
-function possible_mask_values( m::KillerMask, B::BoardT )::Set{Int}
+function possible_cage_values( m::Cage, B::Grid )::Set{Int}
     BIs = Set(B[m.I])
     delete!( BIs, 0 ) # 0 is not an actual value, it is just a placeholder for nothing
     possible_values = Set{Int}()
@@ -103,78 +103,78 @@ end
 
 
 """
-Define a Killer Sudoku from a vector of KillerMasks `masks`.
+Define a Killer Sudoku from a vector of Cages.
 
 # Attributes
 - `plain::PlainSudoku`: The base sudoku with its boars initially blank.
-- `masks::Vector{KillerMask}`: The vector of masks.
-- `masks_idx::BoardT`: A board whose entries are the index of the mask containing the corresponding entry.
+- `cages::Vector{Cage}`: The vector of cages.
+- `cages_idx::Grid`: A grid whose entries are the index of the cage containing the corresponding entry.
 """
 struct KillerSudoku <: ASudoku
     plain::PlainSudoku
-    masks::Vector{KillerMask}
-    masks_idx::BoardT
-    function KillerSudoku( masks::Vector{KillerMask} )
-        N         = _get_killer_N( masks )
+    cages::Vector{Cage}
+    cages_idx::Grid
+    function KillerSudoku( cages::Vector{Cage} )
+        N         = _get_killer_N( cages )
         plain     = PlainSudoku( zeros( Int, (N,N) ) )
-        masks_idx = _get_masks_idx( masks, N )
-        return new( plain, masks, masks_idx )
+        cages_idx = _get_cages_idx( cages, N )
+        return new( plain, cages, cages_idx )
     end
 end
 
 
 """
-    _get_killer_N( masks )
+    _get_killer_N( cages )
 
-Figure the dimension `N` of the board from the masks.
+Figure the dimension `N` of the grid from the cages.
 """
-function _get_killer_N( masks )::Int
-    N_l = [ size(m.I) for m in masks ]
+function _get_killer_N( cages )::Int
+    N_l = [ size(m.I) for m in cages ]
     N   = N_l[1][1]
     n   = round( Int, sqrt(N) )
 
     if n^2 != N
-        error("Board sides must be square numbers, got $N")
+        error("Grid sides must be square numbers, got $N")
     end
     if N_l[1][2] != N
-        error("Invalid mask shape $(N_l[1])")
+        error("Invalid cage shape $(N_l[1])")
     end
     if any( [x != (N,N) for x in N_l] )
-        error("Masks have different shapes: $(N_l)")
+        error("Cages have different shapes: $(N_l)")
     end
     return N
 end
 
 
 """
-    _get_masks_idx( masks, N )
+    _get_cages_idx( cages, N )
 
-Compute the `masks_idx` matrix where each entry is the index of the mask that contains it.
+Compute the `cages_idx` matrix where each entry is the index of the cage that contains it.
 """
-function _get_masks_idx( masks, N )::BoardT
-    masks_idx  = zeros( Int, (N,N) )
-    mask_check = zeros( Int, (N,N) )
-    for (i,m) in enumerate(masks)
-        masks_idx  += i*m.I
-        mask_check += m.I
-        if any( mask_check .> 1 )
-            error("Mask $i overlaps with a previous mask")
+function _get_cages_idx( cages, N )::Grid
+    cages_idx  = zeros( Int, (N,N) )
+    cage_check = zeros( Int, (N,N) )
+    for (i,m) in enumerate(cages)
+        cages_idx  += i*m.I
+        cage_check += m.I
+        if any( cage_check .> 1 )
+            error("Cage $i overlaps with a previous cage")
         end
     end
-    if any( mask_check .!= 1 )
-        error("Masks do not cover the whole board")
+    if any( cage_check .!= 1 )
+        error("Cages do not cover the whole grid")
     end
-    return masks_idx
+    return cages_idx
 end
 
 
 """
-    getboard( ks::KillerSudoku )
+    getgrid( ks::KillerSudoku )
 
-Get the board for the KillerSudoku.
+Get the grid for the KillerSudoku.
 """
-function getboard( ks::KillerSudoku )::BoardT
-    return getboard( ks.plain )
+function getgrid( ks::KillerSudoku )::Grid
+    return getgrid( ks.plain )
 end
 
 
@@ -199,11 +199,36 @@ end
 
 
 """
-    mask_value_map( v::Int )
+    issolution( G::Grid, s::PlainSudoku )
 
-Map an `Int` to a character for displaying with `displayboard`.
+Check whether `G` is a solution for the sudoku `s`.
 """
-function mask_value_map( v::Int )::Char
+function issolution( G::Grid, ks::KillerSudoku )::Bool
+    return issolution( G, ks.plain ) && checkcages( G, ks )
+end
+
+
+"""
+    checkcages( G::Grid, ks::KillerSudoku )
+
+Check whether all cages in `G` have the correct sum.
+"""
+function checkcages( G::Grid, ks::KillerSudoku )::Bool
+    for cage in ks.cages
+        if sum(G[cage.I]) != cage.sum
+            return false
+        end
+    end
+    return true
+end
+
+
+"""
+    cage_value_map( v::Int )
+
+Map an `Int` to a character for displaying with `displaygrid`.
+"""
+function cage_value_map( v::Int )::Char
     if v < 26
         return Char(v+64) # A-Z
     else
@@ -213,14 +238,14 @@ end
 
 
 """
-    displayboard( ks::KillerSudoku )
+    displaygrid( ks::KillerSudoku )
 
-Display the Killer Sudoku board as a board of masks represented by characters
-and a legend identifying the required sum for each mask.
+Display the Killer Sudoku grid as a grid of cages represented by characters
+and a legend identifying the required sum for each cage.
 
 # Examples
 ```julia-repl
-julia> displayboard(ks)
+julia> displaygrid(ks)
  -------------------------
  | A A B | B C C | D E E |
  | F A G | B C C | D D E |
@@ -242,11 +267,11 @@ julia> displayboard(ks)
 Σ(U) = 12    Σ(V) = 11    Σ(W) = 21
 ```
 """
-function displayboard( ks::KillerSudoku )
-    _displayboard( ks.masks_idx, ks.plain.N, mask_value_map )
+function displaygrid( ks::KillerSudoku )
+    _displaygrid( ks.cages_idx, ks.plain.N, cage_value_map )
     println()
-    for (i, mask) in enumerate(ks.masks)
-        printfmt("Σ({1}) = {2:2d}    ", mask_value_map(i), mask.sum )
+    for (i, cage) in enumerate(ks.cages)
+        printfmt("Σ({1}) = {2:2d}    ", cage_value_map(i), cage.sum )
         if i%5 == 0
             println()
         end
@@ -260,10 +285,10 @@ end
 
 Build a Killer Sudoku from a file with the following definition format.
 
-The first line consists of the dimension `N` of the sudoku board.
-Each subsequent line defines a row where the first number is the sum for the mask
+The first line consists of the dimension `N` of the sudoku grid.
+Each subsequent line defines a row where the first number is the sum for the cage
 and the following pairs of numbers (two numbers separated by a comma) are the
-coordinates of the mask.
+coordinates of the cage.
 
 # Example:
 ```
@@ -272,15 +297,15 @@ s1 i11,j11 i12,j12 ... i1k,j1k
 s2 i21,j21 i22,j22 ... i2l,j2l
 ```
 """
-function readsudokufile( ::Type{T}, fname::AbstractString; pyformat=false )::KillerSudoku where {T <: KillerSudoku}
+function readsudokufile( ::Type{T}, fname::AbstractString; pyformat=false )::T where {T <: KillerSudoku}
     lines  = Iterators.Stateful( readlines(fname) )
-    masks  = Vector{KillerMask}()
+    cages  = Vector{Cage}()
     N      = parse( Int, popfirst!(lines) )
     for l in lines
-        mask_args = Iterators.Stateful( split(l) )
+        cage_args = Iterators.Stateful( split(l) )
         I    = zeros( Bool, (N,N) )
-        _sum = parse( Int, popfirst!(mask_args) ) # first number is the sum for the mask
-        for x in mask_args # each x is a coordinate (i,j) belonging to the mask
+        _sum = parse( Int, popfirst!(cage_args) ) # first number is the sum for the cage
+        for x in cage_args # each x is a coordinate (i,j) belonging to the cage
             i,j    = parse.(Int,split(x,","))
             if pyformat
                 i += 1
@@ -288,9 +313,9 @@ function readsudokufile( ::Type{T}, fname::AbstractString; pyformat=false )::Kil
             end
             I[i,j] = true
         end
-        push!( masks, KillerMask( I, _sum ) )
+        push!( cages, Cage( I, _sum ) )
     end
-    return KillerSudoku( masks )
+    return KillerSudoku( cages )
 end
 
 
@@ -302,9 +327,9 @@ Write the Killer Sudoku to file with format as defined in the documentation for 
 function writesudokufile( fname::AbstractString, ks::KillerSudoku )
     open(fname, "w") do io
         write( io, "$(ks.plain.N)")
-        for mask in ks.masks
-            write( io, "\n$(mask.sum)")
-            for ij in findall( mask.I )
+        for cage in ks.cages
+            write( io, "\n$(cage.sum)")
+            for ij in findall( cage.I )
                 printfmt( io, " {1},{2}", ij[1], ij[2] )
             end
         end
@@ -313,15 +338,15 @@ end
 
 
 """
-    availablevalues( ks::KillerSudoku, B::BoardT, N::Int, n::Int, i::Int, j::Int )
+    availablevalues( ks::KillerSudoku, B::Grid, N::Int, n::Int, i::Int, j::Int )
 
-Get a vector with the possible values for board `B` at position `(i,j)`.
+Get a vector with the possible values for grid `B` at position `(i,j)`.
 """
-function availablevalues( ks::KillerSudoku, B::BoardT, N::Int, n::Int, i::Int, j::Int )::Set{Int}
+function availablevalues( ks::KillerSudoku, B::Grid, N::Int, n::Int, i::Int, j::Int )::Set{Int}
     vals = availablevalues( ks.plain, B, N, n, i, j )
     if !isempty(vals)
-        mask_vals = possible_mask_values( ks.masks[ ks.masks_idx[i,j] ], B )
-        intersect!( vals, mask_vals )
+        cage_vals = possible_cage_values( ks.cages[ ks.cages_idx[i,j] ], B )
+        intersect!( vals, cage_vals )
     end
     return vals
 end

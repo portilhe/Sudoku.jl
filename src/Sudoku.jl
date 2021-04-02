@@ -1,21 +1,21 @@
 """
 Solve plain sudokus and killer sudokus.
 
-Use [`readsudokufile`](@ref) to load a sudoku object and [`solve`](@ref) or [`solve!`](@ref) to
-obtain a solution for the sudoku.
+Use [`readsudokufile`](@ref) to load a sudoku object and [`solve`](@ref) to obtain a solution for the sudoku.
 """
 module Sudoku
 
+export Grid
 export ASudoku
 export PlainSudoku
 export KillerSudoku
-export BoardT
 
+export solve
+export getgrid
+export issolution
+export displaygrid
 export readsudokufile
 export writesudokufile
-export displayboard
-export solve
-export solve!
 
 
 """
@@ -31,93 +31,78 @@ include("KillerSudoku.jl")
 """
     solve( s::T ) where {T <: ASudoku}
 
-Solve the sudoku `s` and return a board with the solution. If no solution is found, raise an error.
+Solve the sudoku `s` and return a grid with the solution. If no solution is found, raise an error.
 """
-function solve( s::T )::BoardT where {T <: ASudoku}
-    B  = copy(getboard(s))
-    if !solvestep!( s, B, getN(s), getn(s), 1 )
+function solve( s::T )::Grid where {T <: ASudoku}
+    G  = copy(getgrid(s))
+    if !solvestep!( s, G, getN(s), getn(s), 1 )
         error("No solution found.")
     else
-        return B
+        return G
     end
 end
 
 
 """
-    solve!( s::T ) where {T <: ASudoku}
+    solvestep!( s::T, G::Grid, N::Int, n::Int, k::Int ) where {T <: ASudoku}
 
-Solve the sudoku `s` in place and return its board with the solution. If no solution is found, raise an error.
-"""
-function solve!( s::T )::BoardT where {T <: ASudoku}
-    B  = getboard(s)
-    if !solvestep!( s, B, getN(s), getn(s), 1 )
-        error("No solution found.")
-    else
-        return B
-    end
-end
-
-
-"""
-    solvestep!( s::T, B::BoardT, N::Int, n::Int, k::Int ) where {T <: ASudoku}
-
-Try to solve one step of the board for position `k` and current board `B`.
+Try to solve one step of the grid for position `k` and current grid `G`.
 
 The dimensions `N` and `n` are passed to avoid recomputation.
 The sudoku object is passed for the call to `availablevalues` which depends on its type.
 """
-function solvestep!( s::T, B::BoardT, N::Int, n::Int, k::Int )::Bool where {T <: ASudoku}
+function solvestep!( s::T, G::Grid, N::Int, n::Int, k::Int )::Bool where {T <: ASudoku}
     if k > N^2
         return true
     end
 
-    if B[k] != 0
-        return solvestep!( s, B, N, n, k+1 )
+    if G[k] != 0
+        return solvestep!( s, G, N, n, k+1 )
     end
 
     # Get row, column from linear index
     j,i = divrem(k-1,N) .+ 1
-    vals = availablevalues( s, B, N, n, i, j )
+    vals = availablevalues( s, G, N, n, i, j )
     for m in vals
-        B[i,j] = m
-        if solvestep!( s, B, N, n, k+1 )
+        G[i,j] = m
+        if solvestep!( s, G, N, n, k+1 )
             return true
         end
     end
-    B[i,j] = 0
+    G[i,j] = 0
     return false
 end
 
 
 """
-    displayboard( B::BoardT )
+    displaygrid( G::Grid )
 
-Display the board `B`.
+Display the grid `G`.
 """
-function displayboard( B::BoardT )
-    N = size(B)[1]
-    return _displayboard( B, N )
+function displaygrid( G::Grid )
+    N = size(G)[1]
+    return _displaygrid( G, N )
 end
 
 
 """
-    _displayboard( B::BoardT, N )
+    _displaygrid( G::Grid, N )
 
-Display the board `B` with dimension `N`.
+Display the grid `G` with dimension `N`.
 """
-function _displayboard( B::BoardT, N )
-    Bmap = x-> x == 0 ? "." : "$x"
-    _displayboard( B, N, Bmap )
+function _displaygrid( G::Grid, N )
+    zeromap = x-> x == 0 ? "." : "$x"
+    _displaygrid( G, N, zeromap )
 end
 
 
 """
-    _displayboard( B::BoardT, N, Bmap )
+    _displaygrid( G::Grid, N, zeromap )
 
-Display the board `B` with dimension `N` and use the Bmap function to map blanks,
-which in `B` are represented by 0.
+Display the grid `G` with dimension `N` and use the zeromap function to map blanks,
+which in `G` are represented by 0.
 """
-function _displayboard( B::BoardT, N, Bmap )
+function _displaygrid( G::Grid, N, zeromap )
     n = Int(round(sqrt(N)))
     k = rem(N,n) == 0 ? 2*(N + div(N,n)) + 1 : 2*(N + div(N,n)) + 3
     linesrt = " "*"-"^k
@@ -129,7 +114,7 @@ function _displayboard( B::BoardT, N, Bmap )
             if mod(j,n) == 1
                 print(" |")
             end
-            print(" $(Bmap( B[i,j] ))")
+            print(" $(zeromap( G[i,j] ))")
         end
         println(" |")
     end
