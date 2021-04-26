@@ -14,3 +14,6 @@ println("Running tests:")
         include(my_test)
     end
 end
+
+# https://www.sudokuwiki.org/killersudoku.htm?daily/killersudoku.htm
+# https://sudokusolver.com/play/killer/combinations/
